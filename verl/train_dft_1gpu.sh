@@ -45,6 +45,7 @@ configure_dft_task_profile "${script_dir}"
 : "${PSFT_CLIP_RATIO_LOW:=0.2}"
 : "${PSFT_CLIP_RATIO_HIGH:=0.28}"
 : "${PSFT_MINI_BATCH_SIZE:=32}"
+: "${PSFT_WARMUP_STEPS:=10}"
 : "${SPFT_LAMBDA:=0.1}"
 : "${SPFT_EPS:=1e-6}"
 : "${SPFT_REFERENCE_CPU_OFFLOAD:=false}"
@@ -195,6 +196,7 @@ ${PYTHON_BIN} -m verl.trainer.fsdp_dft_trainer \
     optim.psft.clip_ratio_low=${PSFT_CLIP_RATIO_LOW} \
     optim.psft.clip_ratio_high=${PSFT_CLIP_RATIO_HIGH} \
     optim.psft.mini_batch_size=${PSFT_MINI_BATCH_SIZE} \
+    optim.psft.warmup_steps=${PSFT_WARMUP_STEPS} \
     optim.spft.lambda=${SPFT_LAMBDA} \
     optim.spft.eps=${SPFT_EPS} \
     optim.spft.reference_cpu_offload=${SPFT_REFERENCE_CPU_OFFLOAD} \

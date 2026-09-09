@@ -374,8 +374,6 @@ class FSDPSFTTrainer:
 
         self.steps_per_epoch = len(self.train_dataloader)
         self.total_steps = self.steps_per_epoch * self.config.trainer.total_epochs
-        if self.loss_mode == "psft":
-            self.total_steps *= self.config.data.train_batch_size // self.psft_mini_batch_size
 
         if self.device_mesh.get_rank() == 0:
             print(
@@ -385,7 +383,16 @@ class FSDPSFTTrainer:
 
         num_warmup_steps = int(self.total_steps * self.config.optim.warmup_steps_ratio)
 
-        if not hasattr(self.config.optim, "lr_scheduler") or self.config.optim.lr_scheduler == "cosine":
+        if self.loss_mode == "psft":
+            from transformers import get_constant_schedule_with_warmup
+
+            warmup_steps = int(self.config.optim.psft.get("warmup_steps", 10))
+            if warmup_steps < 0:
+                raise ValueError("PSFT warmup_steps must be non-negative")
+            self.lr_scheduler = get_constant_schedule_with_warmup(
+                self.optimizer, num_warmup_steps=warmup_steps
+            )
+        elif not hasattr(self.config.optim, "lr_scheduler") or self.config.optim.lr_scheduler == "cosine":
             self.lr_scheduler = get_cosine_schedule_with_warmup(
                 optimizer=self.optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=self.total_steps
             )
@@ -924,10 +931,16 @@ class FSDPSFTTrainer:
                 old_log_probs.append(log_probs.detach())
                 del logits
         batch["psft_old_log_probs"] = torch.cat(old_log_probs)
-        metrics = [self.training_step(mini) for mini in batch.split(self.psft_mini_batch_size)]
-        return {key: sum(m[key] for m in metrics) / len(metrics) for key in metrics[0]}
+        metrics = [
+            self.training_step(mini, step_scheduler=False)
+            for mini in batch.split(self.psft_mini_batch_size)
+        ]
+        self.lr_scheduler.step()
+        result = {key: sum(m[key] for m in metrics) / len(metrics) for key in metrics[0]}
+        result["train/lr(1e-3)"] = self.lr_scheduler.get_last_lr()[0] * 1e3
+        return result
 
-    def training_step(self, batch: TensorDict):
+    def training_step(self, batch: TensorDict, step_scheduler=True):
         self._debug_step += 1
         self._debug_micro_step = 0
         self.fsdp_model.train()
@@ -985,7 +998,8 @@ class FSDPSFTTrainer:
 
         log_gpu_memory_usage("After optimizer step", logger=logger)
 
-        self.lr_scheduler.step()
+        if step_scheduler:
+            self.lr_scheduler.step()
 
         # reduce loss across dp ranks
         lr = self.lr_scheduler.get_last_lr()[0]

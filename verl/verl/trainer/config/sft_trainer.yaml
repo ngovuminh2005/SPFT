@@ -49,6 +49,7 @@ optim:
     eps: 1e-6
     reference_cpu_offload: false
   psft:
+    warmup_steps: 10  # Outer batches; constant LR after warmup
     clip_ratio_low: 0.2
     clip_ratio_high: 0.28
     mini_batch_size: 32

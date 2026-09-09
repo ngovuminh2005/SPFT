@@ -55,12 +55,14 @@ PSFT follows [zwhong714/PSFT](https://github.com/zwhong714/PSFT) at commit
 `930e23980a723ecef5af138e6e32aa3798b1fd64`: PPO clipping with unit positive
 advantages, clip bounds 0.2/0.28, and old-policy log probabilities cached before
 each outer batch. Default mini-batch size 32 gives eight optimizer updates per
-batch of 256. The scheduler advances per optimizer update; logging and
-checkpoint steps count outer batches. Validation reports ordinary token NLL.
+batch of 256. PSFT uses a constant schedule with 10 warmup outer batches,
+overriding the generic cosine/warmup-ratio setting. All mini-batch updates in
+an outer batch share one LR; the scheduler advances once afterward.
+Logging and checkpoint steps count outer batches. Validation reports ordinary token NLL.
 This integration currently supports one GPU without sequence parallelism.
 
 Run `bash sweep_psft_1gpu.sh`, optionally with `TASK=offline_math`.
 Sweep variables: `PSFT_CLIP_RATIO_HIGHS`, `OPTIM_LRS`,
 `OPTIM_WEIGHT_DECAYS`. Other settings: `PSFT_CLIP_RATIO_LOW`,
-`PSFT_MINI_BATCH_SIZE`. Prepare and validate offline data with the offline
+`PSFT_MINI_BATCH_SIZE`, `PSFT_WARMUP_STEPS`. Prepare and validate offline data with the offline
 dataset tools before using the generic launcher or sweep.
