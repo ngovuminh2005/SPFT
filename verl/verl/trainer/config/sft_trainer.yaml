@@ -41,12 +41,50 @@ model:
   use_liger: False
   strategy: fsdp2
 optim:
+  name: adamw
+  module: muon
+  loss_mode: dft
+  spft:
+    lambda: 0.1
+    eps: 1e-6
+    reference_cpu_offload: false
+  psft:
+    clip_ratio_low: 0.2
+    clip_ratio_high: 0.28
+    mini_batch_size: 32
   lr: 1e-5
   betas: [0.9, 0.95]
+  eps: 1e-8
   weight_decay: 0.01
   warmup_steps_ratio: 0.1
   clip_grad: 1.0
   lr_scheduler: cosine
+  muon_lr: null
+  aux_lr: null
+  momentum: 0.95
+  nesterov: True
+  ns_steps: 5
+  muon_exclude_name_patterns: [embed_tokens, embeddings, word_embeddings, lm_head, output_layer]
+  mbo:
+    # minibatch: one raw sample per micro-batch; projection: split post-Polar update by normalized history;
+    # global: one final-update sample per optimizer step;
+    # onlygrad: rolling queue of final-update samples, without centroid/OT memory;
+    # greedy: orthogonalize before P/correction, then do not orthogonalize again
+    gradient_source: minibatch
+    num_centroids: 16
+    centroid_dim: 1024
+    lambda_memory: 0.01
+    memory_init_seed: null
+    ot_ws_steps: 512
+    ot_step_update: 64
+    kmeans_steps: 10
+    ot_epsilon: 0.03
+    ot_g_lr: 0.1
+    ot_y_lr: 0.01
+    ot_g_steps: 5
+    ot_y_steps: 5
+    offset: 0
+    window_size: 0
 ulysses_sequence_parallel_size: 1
 use_remove_padding: False
 trainer:

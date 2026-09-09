@@ -87,79 +87,59 @@ pip install --no-deps -e .
 
 ## 🚀 Getting Started
 
-### Step 1: Prepare Data
+### Step 1: Download Data
 
 ```bash
-# Generate training data (optional: change --train_end to control volume)
-python examples/data_preprocess/numina_cot.py --train_end 100000
-
-# Generate evaluation data
-python examples/data_preprocess/math_dataset.py
+# Download and preprocess the math training and evaluation data
+bash download_datasets.sh
 ```
 
-### Step 2: Launch Training
+For offline math, generate the model responses and verify them separately:
 
 ```bash
-nproc_per_node=8
-project_name=numina-cot
-
-experiment_name=numina-cot-dft-qwen-2.5-math-1.5b
-save_path=checkpoints/$experiment_name
-
-torchrun --standalone --nnodes=1 --nproc_per_node=$nproc_per_node \
-        -m verl.trainer.fsdp_dft_trainer \
-    data.train_files=data/numina_cot/train.parquet \
-    data.val_files=data/math500/test.parquet \
-    data.prompt_key=extra_info \
-    data.response_key=extra_info \
-    data.train_batch_size=256 \
-    data.max_length=2048 \
-    optim.lr=5e-5 \
-    data.prompt_dict_keys=['question'] \
-    data.response_dict_keys=['answer'] \
-    data.micro_batch_size_per_gpu=4 \
-    model.partial_pretrain=Qwen/Qwen2.5-Math-1.5B \
-    model.use_liger=True \
-    model.fsdp_config.model_dtype=bf16 \
-    trainer.default_local_dir=$save_path \
-    trainer.project_name=$project_name \
-    trainer.experiment_name="$experiment_name-$(date +%Y%m%d-%H%M%S)" \
-    trainer.logger=['console','tensorboard'] \
-    trainer.default_hdfs_dir=null \
-    trainer.test_freq=10 \
-    trainer.save_freq=50 \
-    trainer.total_epochs=1 \
-    ulysses_sequence_parallel_size=1 \
-    use_remove_padding=true
+bash scripts/offline_math/generate_data.sh
 ```
 
-### Step 3: Evaluation
-
-To evaluate the trained model, please first follow the [Qwen2.5-Math repository](https://github.com/QwenLM/Qwen2.5-Math) to set up the evaluation environment.
+The optional `NUMINA_TRAIN_END` variable controls the number of NuminaMath-CoT
+training examples:
 
 ```bash
-# Select the prompt format matching your model
-PROMPT_TYPE="qwen-boxed"
-# PROMPT_TYPE="llama-base-boxed"
-# PROMPT_TYPE="deepseek-math"
+NUMINA_TRAIN_END=100000 bash download_datasets.sh
+```
 
-# Set available GPUs
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+### Step 2: Launch Training and Evaluation
 
-# Configure sampling settings
-N_SAMPLING=16
-TEMPERATURE=1
+```bash
+# DFT on math (training also runs the default evaluation)
+bash scripts/math/train_1gpu.sh
 
-# Specify model and output directories
-MODEL_NAME_OR_PATH=""  # e.g., checkpoints/your-model-name
-OUTPUT_DIR=""          # e.g., outputs/eval_results
+# DFT on offline math (after scripts/offline_math/generate_data.sh)
+bash scripts/offline_math/train_1gpu.sh
 
-# Run evaluation
-bash sh/eval.sh $PROMPT_TYPE $MODEL_NAME_OR_PATH $OUTPUT_DIR $N_SAMPLING $TEMPERATURE
+# PSFT sweep (optionally set TASK=offline_math)
+bash sweep_psft_1gpu.sh
+
+# MBO sweep
+bash sweep_mbo_1gpu.sh
+```
+
+Each launcher uses the prepared files under `data/`, saves checkpoints under
+`checkpoints/`, and evaluates the latest checkpoint after training.
+
+### Step 3: Evaluation Only
+
+To evaluate the trained model separately, please first follow the
+[Qwen2.5-Math repository](https://github.com/QwenLM/Qwen2.5-Math) to set up the
+evaluation environment.
+
+```bash
+MODEL_NAME_OR_PATH=checkpoints/<task>/<experiment>/global_step_<step> \
+OUTPUT_DIR=outputs/eval_results \
+bash eval_dft.sh
 ```
 
 ## Limitations
-Based on our evaluations and community feedback, DFT performs strongly on tasks with non-deterministic solution trajectories—i.e., those that admit multiple valid reasoning paths—such as mathematical chain-of-thought (CoT) reasoning, solutions to highly complex coding problems, and multimodal reasoning with informative CoT. By contrast, its performance is weaker on tasks with a single, well-specified ground-truth answer, particularly when the associated CoT (if exists) is highly constrained and near-deterministic (low-entropy).
+Based on our evaluations and community feedback, DFT performs strongly on mathematical tasks with non-deterministic solution trajectories—i.e., those that admit multiple valid reasoning paths. By contrast, its performance is weaker on tasks with a single, well-specified ground-truth answer, particularly when the associated CoT (if exists) is highly constrained and near-deterministic (low-entropy).
 
 ## Citation
 If you find this paper valuable for your research or applications, we would appreciate it if you could cite our work:
