@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-# Task defaults shared by DFT and SPFT launchers. Explicit environment values
-# always win, so profiles remain easy to override for local datasets/models.
+# Backward-compatible DFT/SPFT adapter around the shared dataset profiles.
 
 _dft_set_default() {
     local name="$1"
@@ -13,43 +12,32 @@ _dft_set_default() {
 
 configure_dft_task_profile() {
     local script_dir="$1"
-    TASK="${TASK:-math}"
+    local requested_dataset="${DATASET:-}"
 
-    case "${TASK}" in
-        math)
-            # Preserve the original one-GPU launcher's defaults.
-            _dft_set_default PROJECT_NAME "DFT_log"
-            _dft_set_default EXPERIMENT_NAME "muon-lora"
-            _dft_set_default TRAIN_FILE "${script_dir}/data/numina_cot/train.parquet"
-            _dft_set_default VAL_FILE "${script_dir}/data/math500/test.parquet"
-            _dft_set_default MODEL_NAME "Qwen/Qwen2.5-Math-1.5B"
-            _dft_set_default TRAIN_BATCH_SIZE "256"
-            _dft_set_default MICRO_BATCH_SIZE_PER_GPU "8"
-            _dft_set_default MAX_LENGTH "2048"
-            _dft_set_default WARMUP_STEPS_RATIO "0.1"
-            _dft_set_default TASK_EVAL "math"
-            ;;
-        offline_math)
-            _dft_set_default PROJECT_NAME "DFT_offline_math"
-            _dft_set_default EXPERIMENT_NAME "dft-offline-math-qwen2.5-math-1.5b"
-            _dft_set_default TRAIN_FILE "${script_dir}/data/offline_math/train.parquet"
-            _dft_set_default VAL_FILE "${script_dir}/data/math500/test.parquet"
-            _dft_set_default MODEL_NAME "Qwen/Qwen2.5-Math-1.5B"
-            _dft_set_default TRAIN_BATCH_SIZE "256"
-            _dft_set_default MICRO_BATCH_SIZE_PER_GPU "8"
-            _dft_set_default MAX_LENGTH "2048"
-            _dft_set_default WARMUP_STEPS_RATIO "0.1"
-            _dft_set_default TASK_EVAL "math"
-            ;;
-        *)
-            echo "Unknown TASK=${TASK}; expected math or offline_math." >&2
-            return 2
-            ;;
-    esac
+    if [[ -z "${requested_dataset}" ]]; then
+        case "${TASK:-}" in
+            math) requested_dataset="numina" ;;
+            offline_math) requested_dataset="offline_math" ;;
+            *) requested_dataset="numina" ;;
+        esac
+    fi
 
-    _dft_set_default TRAIN_PROMPT_KEY "extra_info"
-    _dft_set_default TRAIN_RESPONSE_KEY "extra_info"
-    _dft_set_default TRAIN_PROMPT_DICT_KEYS "['question']"
-    _dft_set_default TRAIN_RESPONSE_DICT_KEYS "['answer']"
-    export TASK TASK_EVAL
+    source "${script_dir}/dataset_profiles.sh"
+    configure_dataset_profile "${script_dir}" "${requested_dataset}"
+
+    _dft_set_default PROJECT_NAME "${DATASET_PROJECT_NAME}"
+    _dft_set_default EXPERIMENT_NAME "${DATASET_EXPERIMENT_NAME}"
+    _dft_set_default TRAIN_FILE "${DATASET_TRAIN_FILE}"
+    _dft_set_default VAL_FILE "${DATASET_VAL_FILE}"
+    _dft_set_default MODEL_NAME "${DATASET_MODEL_NAME}"
+    _dft_set_default TRAIN_BATCH_SIZE "${DATASET_TRAIN_BATCH_SIZE}"
+    _dft_set_default MICRO_BATCH_SIZE_PER_GPU "${DATASET_MICRO_BATCH_SIZE_PER_GPU}"
+    _dft_set_default MAX_LENGTH "${DATASET_MAX_LENGTH}"
+    _dft_set_default WARMUP_STEPS_RATIO "${DATASET_WARMUP_STEPS_RATIO}"
+    _dft_set_default TASK_EVAL "${DATASET_TASK_EVAL}"
+    _dft_set_default TRAIN_PROMPT_KEY "${DATASET_TRAIN_PROMPT_KEY}"
+    _dft_set_default TRAIN_RESPONSE_KEY "${DATASET_TRAIN_RESPONSE_KEY}"
+    _dft_set_default TRAIN_PROMPT_DICT_KEYS "${DATASET_TRAIN_PROMPT_DICT_KEYS}"
+    _dft_set_default TRAIN_RESPONSE_DICT_KEYS "${DATASET_TRAIN_RESPONSE_DICT_KEYS}"
+    export TASK TASK_EVAL DATASET
 }

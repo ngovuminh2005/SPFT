@@ -6,6 +6,16 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 python_bin="${PYTHON_BIN:-python}"
+dataset="${DATASET:-numina}"
+
+if [[ "${dataset}" == "openr1" ]]; then
+    exec "${script_dir}/prepare_openr1_psft.sh" "$@"
+fi
+if [[ "${dataset}" != "numina" ]]; then
+    echo "DATASET must be numina or openr1" >&2
+    exit 2
+fi
+export HF_HOME="${HF_HOME:-${script_dir}/.cache/huggingface}"
 numina_dir="${script_dir}/data/numina_cot"
 math500_dir="${script_dir}/data/math500"
 numina_train_end="${NUMINA_TRAIN_END:-100000}"

@@ -34,10 +34,11 @@ configure_dft_task_profile "${script_dir}"
 : "${SEED:=1}"
 : "${WANDB_API_KEY:=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}"
 : "${DIST_INIT_FILE:=/tmp/verl_dft_1gpu_${USER:-user}_$$.dist}"
-: "${LORA_RANK:=8}"
+: "${LORA_RANK:=0}"
 : "${LORA_ALPHA:=16}"
 : "${LORA_TARGET_MODULES:=all-linear}"
-: "${TOTAL_EPOCHS:=1}"
+: "${EPOCHS:=${TOTAL_EPOCHS:-1}}"
+: "${TOTAL_EPOCHS:=${EPOCHS}}"
 : "${TEST_FREQ:=10}"
 : "${SAVE_FREQ:=50}"
 : "${USE_REMOVE_PADDING:=true}"
@@ -48,6 +49,7 @@ configure_dft_task_profile "${script_dir}"
 : "${PSFT_WARMUP_STEPS:=10}"
 : "${SPFT_LAMBDA:=0.1}"
 : "${SPFT_EPS:=1e-6}"
+: "${SPFT_WEIGHT_THRESHOLD:=0.01}"
 : "${SPFT_REFERENCE_CPU_OFFLOAD:=false}"
 : "${WARMUP_STEPS_RATIO:=0.1}"
 : "${LR_SCHEDULER:=cosine}"
@@ -91,7 +93,7 @@ trap 'rm -f "${DIST_INIT_FILE}"' EXIT
 #   OPTIM_NAME=singledevicemuonwithauxadam bash train_dft_1gpu.sh
 #   OPTIM_NAME=singledevicembowithauxadam bash train_dft_1gpu.sh
 #   OPTIM_NAME=singledevicembowindowwithauxadam bash train_dft_1gpu.sh
-: "${OPTIM_NAME:=singledevicembowindowwithauxadam}"
+: "${OPTIM_NAME:=adamw}"
 : "${OPTIM_MODULE:=muon}"
 
 # AdamW-compatible defaults
@@ -100,8 +102,8 @@ trap 'rm -f "${DIST_INIT_FILE}"' EXIT
 : "${OPTIM_BETA2:=0.95}"
 : "${OPTIM_EPS:=1e-8}"
 
-# Keep weight decay aligned with the original script.
-: "${OPTIM_WEIGHT_DECAY:=0}"
+# Standard AdamW weight decay.
+: "${OPTIM_WEIGHT_DECAY:=0.01}"
 
 # Muon/MBO defaults.
 # Intentionally different from aux Adam LR.
@@ -110,6 +112,10 @@ trap 'rm -f "${DIST_INIT_FILE}"' EXIT
 : "${OPTIM_MOMENTUM:=0.95}"
 : "${OPTIM_NESTEROV:=true}"
 : "${OPTIM_NS_STEPS:=5}"
+: "${OPTIM_HTMUON_ALPHA:=0.125}"
+: "${OPTIM_SOREN_LAMBDA:=0.01}"
+: "${OPTIM_SOREN_MODE:=polynomial}" # polynomial or exact
+# Single-device names: soren, sorenauxadam, htmuon, htmuonauxadam.
 
 # ------------------------
 # MBO setup
@@ -162,18 +168,24 @@ trap 'rm -f "${DIST_INIT_FILE}"' EXIT
 : "${EVAL_CUDA_VISIBLE_DEVICES:=0}"
 
 if [[ ! -f "${TRAIN_FILE}" ]]; then
-    echo "Missing TASK=${TASK} training data: ${TRAIN_FILE}" >&2
+    echo "Missing DATASET=${DATASET} training data: ${TRAIN_FILE}" >&2
     echo "See ${script_dir}/DFT_TASKS.md for the preparation command." >&2
     exit 1
 fi
 if [[ ! -f "${VAL_FILE}" ]]; then
-    echo "Missing TASK=${TASK} validation data: ${VAL_FILE}" >&2
+    echo "Missing DATASET=${DATASET} validation data: ${VAL_FILE}" >&2
     echo "See ${script_dir}/DFT_TASKS.md for the preparation command." >&2
     exit 1
 fi
 
-echo "Task profile: ${TASK} (eval=${TASK_EVAL})"
+echo "Dataset profile: ${DATASET} (task=${TASK}, eval=${TASK_EVAL}, epochs=${TOTAL_EPOCHS})"
 
+if [[ "${DRY_RUN:-0}" == "1" ]]; then
+    echo "DRY_RUN: DATASET=${DATASET} TRAIN_FILE=${TRAIN_FILE} VAL_FILE=${VAL_FILE} MODEL_NAME=${MODEL_NAME}"
+    exit 0
+fi
+
+# MODEL_NAME defaults to the standard model from dataset_profiles.sh.
 ${PYTHON_BIN} -m verl.trainer.fsdp_dft_trainer \
     data.train_files=${TRAIN_FILE} \
     data.val_files=${VAL_FILE} \
@@ -199,6 +211,7 @@ ${PYTHON_BIN} -m verl.trainer.fsdp_dft_trainer \
     optim.psft.warmup_steps=${PSFT_WARMUP_STEPS} \
     optim.spft.lambda=${SPFT_LAMBDA} \
     optim.spft.eps=${SPFT_EPS} \
+    optim.spft.weight_threshold=${SPFT_WEIGHT_THRESHOLD} \
     optim.spft.reference_cpu_offload=${SPFT_REFERENCE_CPU_OFFLOAD} \
     optim.lr=${OPTIM_LR} \
     optim.betas=[${OPTIM_BETA1},${OPTIM_BETA2}] \
@@ -211,6 +224,9 @@ ${PYTHON_BIN} -m verl.trainer.fsdp_dft_trainer \
     optim.momentum=${OPTIM_MOMENTUM} \
     optim.nesterov=${OPTIM_NESTEROV} \
     optim.ns_steps=${OPTIM_NS_STEPS} \
+    optim.htmuon.alpha=${OPTIM_HTMUON_ALPHA} \
+    optim.soren.lamdba=${OPTIM_SOREN_LAMBDA} \
+    optim.soren.mode=${OPTIM_SOREN_MODE} \
     optim.mbo.num_centroids=${OPTIM_MBO_NUM_CENTROIDS} \
     optim.mbo.centroid_dim=${OPTIM_MBO_CENTROID_DIM} \
     optim.mbo.gradient_source=${OPTIM_MBO_GRADIENT_SOURCE} \
@@ -252,6 +268,8 @@ if [[ "${RUN_EVAL}" == "1" || "${RUN_EVAL}" == "true" ]]; then
         math)
             eval_output_dir="${latest_ckpt}/math_eval_${EVAL_PROMPT_TYPE}_n${EVAL_N_SAMPLING}_t${EVAL_TEMPERATURE}"
             MODEL_NAME_OR_PATH="$latest_ckpt" \
+            DATASET="${DATASET}" \
+            EVAL_DATA_GROUPS="${EVAL_DATA_GROUPS:-${DATASET_EVAL_GROUPS}}" \
             OUTPUT_DIR="$eval_output_dir" \
             EVAL_PROMPT_TYPE="${EVAL_PROMPT_TYPE}" \
             EVAL_N_SAMPLING="${EVAL_N_SAMPLING}" \

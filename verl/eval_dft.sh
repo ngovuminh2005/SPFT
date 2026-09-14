@@ -3,6 +3,10 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
+source "${script_dir}/dataset_profiles.sh"
+configure_dataset_profile "${script_dir}" "${DATASET:-numina}"
+# Models: numina=Qwen/Qwen2.5-Math-1.5B; openr1=Qwen/Qwen2.5-7B-Instruct.
+# Training wrappers override this with the trained/merged checkpoint.
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     echo "Usage: bash ${script_dir}/eval_dft.sh" >&2
@@ -10,7 +14,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 : "${PYTHON_BIN:=$(command -v python)}"
-: "${MODEL_NAME_OR_PATH:=${script_dir}/checkpoints/mbo_42/global_step_390}"
+: "${MODEL_NAME_OR_PATH:=${DATASET_MODEL_NAME}}"
 : "${LORA_MERGED_MODEL_DIR:=${MODEL_NAME_OR_PATH}/merged_hf}"
 : "${EVAL_PROMPT_TYPE:=qwen-boxed}"
 : "${EVAL_N_SAMPLING:=16}"
@@ -22,7 +26,7 @@ fi
 : "${EVAL_START:=0}"
 : "${EVAL_END:=-1}"
 : "${EVAL_ANTLR411_PATH:=${repo_root}/.eval_deps/antlr4-python3-runtime-4.11.1}"
-: "${EVAL_DATA_GROUPS:=math500;math_oai,minerva_math,olympiadbench;aime24,amc23}"
+: "${EVAL_DATA_GROUPS:=${DATASET_EVAL_GROUPS}}"
 
 # vLLM requires a complete Hugging Face model. Merge adapter-only LoRA
 # checkpoints with their base model before evaluation.
@@ -54,7 +58,7 @@ PY
     MODEL_NAME_OR_PATH="${LORA_MERGED_MODEL_DIR}"
 fi
 
-: "${OUTPUT_DIR:=${MODEL_NAME_OR_PATH}/math_eval_${EVAL_PROMPT_TYPE}_n${EVAL_N_SAMPLING}_t${EVAL_TEMPERATURE}}"
+: "${OUTPUT_DIR:=${script_dir}/eval_outputs/${DATASET}/math_eval_${EVAL_PROMPT_TYPE}_n${EVAL_N_SAMPLING}_t${EVAL_TEMPERATURE}}"
 
 run_eval() {
     local data_name="$1"

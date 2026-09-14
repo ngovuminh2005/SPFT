@@ -87,44 +87,130 @@ pip install --no-deps -e .
 
 ## 🚀 Getting Started
 
-### Step 1: Download Data
+### Step 1: Prepare Datasets
+
+Run the following commands from the repository root (`DFT/`):
 
 ```bash
-# Download and preprocess the math training and evaluation data
-bash download_datasets.sh
+# Download and preprocess both configured datasets
+bash verl/prepare_all_datasets.sh
 ```
 
-For offline math, generate the model responses and verify them separately:
+The profiles and base models are:
+
+| Profile | Base model | Training/evaluation data |
+|---|---|---|
+| `numina` | `Qwen/Qwen2.5-Math-1.5B` | NuminaMath-CoT / Math500 |
+| `openr1` | `Qwen/Qwen2.5-7B-Instruct` | OpenR1 / AIME24 |
+
+Prepare only one profile when needed:
 
 ```bash
-bash scripts/offline_math/generate_data.sh
+DATASETS=numina bash verl/prepare_all_datasets.sh
+DATASETS=openr1 bash verl/prepare_all_datasets.sh
+```
+
+The script is safe to rerun and only downloads or converts missing files. The
+Qwen model weights are downloaded automatically by Hugging Face on first use.
+
+For offline math, generate and verify the rejection-sampling data separately:
+
+```bash
+bash verl/scripts/offline_math/generate_data.sh
 ```
 
 The optional `NUMINA_TRAIN_END` variable controls the number of NuminaMath-CoT
 training examples:
 
 ```bash
-NUMINA_TRAIN_END=100000 bash download_datasets.sh
+NUMINA_TRAIN_END=100000 bash verl/prepare_all_datasets.sh
 ```
 
 ### Step 2: Launch Training and Evaluation
 
 ```bash
-# DFT on math (training also runs the default evaluation)
-bash scripts/math/train_1gpu.sh
+# DFT sweep
+DATASET=numina bash verl/sweep_dft_1gpu.sh
 
-# DFT on offline math (after scripts/offline_math/generate_data.sh)
-bash scripts/offline_math/train_1gpu.sh
+# SPFT sweep
+DATASET=numina bash verl/sweep_spft_1gpu.sh
 
-# PSFT sweep (optionally set TASK=offline_math)
-bash sweep_psft_1gpu.sh
+# PSFT sweep
+DATASET=numina bash verl/sweep_psft_1gpu.sh
 
 # MBO sweep
-bash sweep_mbo_1gpu.sh
+DATASET=numina bash verl/sweep_mbo_1gpu.sh
 ```
 
-Each launcher uses the prepared files under `data/`, saves checkpoints under
-`checkpoints/`, and evaluates the latest checkpoint after training.
+Use `DATASET=openr1` for the OpenR1 profile. Set `EPOCHS_LIST` to sweep
+multiple epoch values:
+
+```bash
+DATASET=numina EPOCHS_LIST="1 3 5" bash verl/sweep_psft_1gpu.sh
+```
+
+Each sweep uses the model associated with its dataset profile, saves
+checkpoints under `verl/checkpoints/`, and evaluates the latest checkpoint
+automatically. Set `RUN_EVAL=0` to disable automatic evaluation.
+
+### Sweep Options and Recommended Configurations
+
+Recommended epoch settings:
+
+| Dataset | Recommended epochs | Model |
+|---|---:|---|
+| `numina` | `1` | `Qwen/Qwen2.5-Math-1.5B` |
+| `openr1` | `10` | `Qwen/Qwen2.5-7B-Instruct` |
+
+Run a recommended configuration with:
+
+```bash
+# Numina: one epoch
+DATASET=numina EPOCHS_LIST=1 bash verl/sweep_psft_1gpu.sh
+
+# OpenR1: ten epochs
+DATASET=openr1 EPOCHS_LIST=10 bash verl/sweep_psft_1gpu.sh
+```
+
+Common options for all sweeps:
+
+| Option | Purpose |
+|---|---|
+| `DATASET` | `numina` or `openr1` |
+| `EPOCHS_LIST` | Space-separated epoch values, for example `"1 3 5"` |
+| `RUN_EVAL` | `1` to evaluate automatically, `0` to disable |
+| `SAVE_FREQ` | Checkpoint frequency |
+| `TEST_FREQ` | Validation frequency |
+
+Method-specific options and current priorities:
+
+| Sweep | Main options | Current priority |
+|---|---|---|
+| DFT | `OPTIMIZERS`, `MAIN_LRS`, `SOREN_LAMBDAS`, `SOREN_MODE`, `BASE_LR`, `AUX_LR` | SorenAuxAdam, base LR `8e-4`, aux LR `5e-5`, Muon LR `7e-4`, lambda `1` |
+| SPFT | `SPFT_LAMBDAS`, `OPTIM_LRS`, `OPTIM_WEIGHT_DECAYS`, `SPFT_WEIGHT_THRESHOLD` | AdamW, LR `1e-4`, lambda `0.1`, weight decay `0.01` |
+| PSFT | `PSFT_CLIP_RATIO_HIGHS`, `OPTIM_LRS`, `OPTIM_WEIGHT_DECAYS`, sequence-length and rollout settings | AdamW, LR `1e-6`, weight decay `0.1`, clip `0.2/0.28`, warmup `10` steps |
+| MBO | `OPTIM_MUON_LR` and the `OPTIM_MBO_*` parameters in the sweep loops | `singledevicembowindowwithauxadam`, projection source, Muon LR `8e-4`, 64 centroids, dimension `4096` |
+
+DFT, SPFT, and PSFT accept space-separated environment values directly. MBO
+currently defines its sweep values in nested loops inside
+`verl/sweep_mbo_1gpu.sh`; edit those loop values to expand the MBO grid.
+
+Values can be overridden inline without editing the scripts. For example:
+
+```bash
+DATASET=numina EPOCHS_LIST="1 3" OPTIM_LRS="5e-7 1e-6" \
+  bash verl/sweep_psft_1gpu.sh
+```
+
+The lower-level math launchers remain available:
+
+```bash
+# DFT on math (also prepares missing math data)
+bash verl/scripts/math/train_1gpu.sh
+
+# DFT on offline math (after verl/scripts/offline_math/generate_data.sh)
+bash verl/scripts/offline_math/train_1gpu.sh
+```
 
 ### Step 3: Evaluation Only
 
@@ -135,8 +221,11 @@ evaluation environment.
 ```bash
 MODEL_NAME_OR_PATH=checkpoints/<task>/<experiment>/global_step_<step> \
 OUTPUT_DIR=outputs/eval_results \
-bash eval_dft.sh
+bash verl/eval_dft.sh
 ```
+
+Set `DATASET=numina` or `DATASET=openr1` so the evaluator selects the matching
+evaluation group (`math500` or `aime24`).
 
 ## Limitations
 Based on our evaluations and community feedback, DFT performs strongly on mathematical tasks with non-deterministic solution trajectories—i.e., those that admit multiple valid reasoning paths. By contrast, its performance is weaker on tasks with a single, well-specified ground-truth answer, particularly when the associated CoT (if exists) is highly constrained and near-deterministic (low-entropy).

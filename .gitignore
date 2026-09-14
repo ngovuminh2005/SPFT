@@ -1,0 +1,18 @@
+# Python and local tooling
+__pycache__/
+*.py[cod]
+.cache/
+.eval_deps/
+
+# Local datasets, checkpoints, outputs and experiment logs
+/verl/data/
+/verl/checkpoints/
+/verl/outputs/
+/outputs/
+/wandb/
+/verl/wandb/
+/math_evaluation/data/math500/
+*.log
+
+# Downloaded binary packages
+*.whl*

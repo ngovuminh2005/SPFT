@@ -4,16 +4,20 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../_common/run_text_task.sh"
 verl_root="$(cd "${script_dir}/../.." && pwd)"
+source "${verl_root}/dataset_profiles.sh"
+dataset_source="${DATASET_SOURCE:-${DATASET:-numina}}"
+configure_dataset_profile "${verl_root}" "${dataset_source}"
 
 # Edit these arrays, then run: bash verl/scripts/offline_math/train_1gpu.sh
 read -r -a TRAIN_MODES <<< "${OFFLINE_TRAIN_MODES:-dft}"
-HF_MODEL="Qwen/Qwen2.5-Math-1.5B"
+HF_MODEL="${HF_MODEL:-${DATASET_MODEL_NAME}}"
 LORA_RANK=0
 LORA_ALPHA=16
 read -r -a LEARNING_RATES <<< "${OFFLINE_LEARNING_RATES:-5e-5}"
 read -r -a SPFT_LAMBDAS <<< "${OFFLINE_SPFT_LAMBDAS:-0.1}"
 SEEDS=(1)
 WARMUP_RATIO=0.1
+EPOCHS="${EPOCHS:-${TOTAL_EPOCHS:-1}}"
 SAVE_FREQ=-1
 TEST_FREQ=-1
 # Default one-GPU DFT/SPFT accumulation:
@@ -21,8 +25,11 @@ TEST_FREQ=-1
 TRAIN_BATCH_SIZE=256
 MICRO_BATCH_SIZE_PER_GPU=8
 export TRAIN_BATCH_SIZE MICRO_BATCH_SIZE_PER_GPU SAVE_FREQ TEST_FREQ
-SOURCE_FILE="${verl_root}/data/numina_cot/train.parquet"
-DATA_DIR="${verl_root}/data/offline_math"
+export EPOCHS
+export DATASET=offline_math
+SOURCE_FILE="${SOURCE_FILE:-${DATASET_TRAIN_FILE}}"
+DATA_DIR="${OFFLINE_DATA_DIR:-${verl_root}/data/offline_math_${dataset_source}}"
+export TRAIN_FILE="${DATA_DIR}/train.parquet" VAL_FILE="${VAL_FILE:-${DATASET_VAL_FILE}}"
 NUM_QUESTIONS=100000
 RESPONSES_PER_QUESTION=4
 TEMPERATURE=1.0
@@ -49,10 +56,10 @@ for seed in "${SEEDS[@]}"; do
         for train_mode in "${TRAIN_MODES[@]}"; do
             if [[ "${train_mode}" == "spft" ]]; then
                 for spft_lambda in "${SPFT_LAMBDAS[@]}"; do
-                    run_text_task offline_math "${HF_MODEL}" "${learning_rate}" "${WARMUP_RATIO}" "${train_mode}" "${spft_lambda}" "${seed}"
+                    DATASET=offline_math run_text_task offline_math "${HF_MODEL}" "${learning_rate}" "${WARMUP_RATIO}" "${train_mode}" "${spft_lambda}" "${seed}"
                 done
             else
-                run_text_task offline_math "${HF_MODEL}" "${learning_rate}" "${WARMUP_RATIO}" "${train_mode}" 0.1 "${seed}"
+                DATASET=offline_math run_text_task offline_math "${HF_MODEL}" "${learning_rate}" "${WARMUP_RATIO}" "${train_mode}" 0.1 "${seed}"
             fi
         done
     done

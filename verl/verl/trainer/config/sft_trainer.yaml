@@ -47,6 +47,7 @@ optim:
   spft:
     lambda: 0.1
     eps: 1e-6
+    weight_threshold: 0.0
     reference_cpu_offload: false
   psft:
     warmup_steps: 10  # Outer batches; constant LR after warmup
@@ -65,6 +66,11 @@ optim:
   momentum: 0.95
   nesterov: True
   ns_steps: 5
+  htmuon:
+    alpha: 0.125
+  soren:
+    lamdba: 0.01
+    mode: polynomial  # polynomial or exact
   muon_exclude_name_patterns: [embed_tokens, embeddings, word_embeddings, lm_head, output_layer]
   mbo:
     # minibatch: one raw sample per micro-batch; projection: split post-Polar update by normalized history;

@@ -3,6 +3,10 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
+source "${script_dir}/dataset_profiles.sh"
+configure_dataset_profile "${script_dir}" "${DATASET:-numina}"
+# Models: numina=Qwen/Qwen2.5-Math-1.5B; openr1=Qwen/Qwen2.5-7B-Instruct.
+# Set MODEL_NAME_OR_PATH to evaluate a trained checkpoint.
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     cat >&2 <<EOF
@@ -19,7 +23,7 @@ EOF
 fi
 
 : "${PYTHON_BIN:=$(command -v python)}"
-: "${MODEL_NAME_OR_PATH:=${script_dir}/checkpoints/mbo_42/global_step_390}"
+: "${MODEL_NAME_OR_PATH:=${DATASET_MODEL_NAME}}"
 : "${MAX_ROLLOUT:=${1:-}}"
 
 if [[ -z "${MAX_ROLLOUT}" ]]; then
@@ -47,7 +51,7 @@ fi
 : "${EVAL_END:=-1}"
 : "${EVAL_SEED:=0}"
 : "${EVAL_ANTLR411_PATH:=${repo_root}/.eval_deps/antlr4-python3-runtime-4.11.1}"
-: "${EVAL_DATA_GROUPS:=math500;math_oai,minerva_math,olympiadbench;aime24,amc23}"
+: "${EVAL_DATA_GROUPS:=${DATASET_EVAL_GROUPS}}"
 
 if (( EVAL_N_SAMPLING != max_samples )); then
     echo "ERROR: EVAL_N_SAMPLING must equal MAX_ROLLOUT (${max_samples})" >&2
@@ -55,7 +59,7 @@ if (( EVAL_N_SAMPLING != max_samples )); then
 fi
 
 model_path="${MODEL_NAME_OR_PATH%/}"
-: "${OUTPUT_DIR:=${model_path}/math_eval_${EVAL_PROMPT_TYPE}_n${max_samples}_t${EVAL_TEMPERATURE}_prefix}"
+: "${OUTPUT_DIR:=${script_dir}/eval_outputs/${DATASET}/math_eval_${EVAL_PROMPT_TYPE}_n${max_samples}_t${EVAL_TEMPERATURE}_prefix}"
 
 echo "Running one evaluation with ${max_samples} rollouts per question"
 echo "Raw eval output: ${OUTPUT_DIR}"

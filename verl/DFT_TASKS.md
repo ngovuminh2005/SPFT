@@ -1,14 +1,38 @@
 # DFT task profiles
 
-Only mathematical-reasoning task profiles are supported. They share the same
-DFT/SPFT/PSFT trainer, optimizer, checkpointing, logging, Math500 validation,
-and post-training math evaluator.
+The `numina` and `openr1` profiles share the same parquet contract and can be
+selected in every DFT/SPFT/PSFT launcher with `DATASET=numina` or
+`DATASET=openr1`. Numina uses Qwen2.5-Math-1.5B + Math500; OpenR1 uses
+Qwen2.5-7B-Instruct + AIME24.
+
+`EPOCHS` selects the training epoch count in all launchers and overrides
+`TOTAL_EPOCHS`.
+
+Prepare all configured datasets with one command:
+
+```bash
+bash verl/prepare_all_datasets.sh
+```
+
+Use `DATASETS="numina" bash verl/prepare_all_datasets.sh` or
+`DATASETS="openr1" bash verl/prepare_all_datasets.sh` to prepare only one profile.
+
+Training launchers run the math evaluator automatically after the final
+checkpoint; set `RUN_EVAL=0` to disable it.
+
+Sweep one or more epoch values from the shell:
+
+```bash
+EPOCHS_LIST="1 3 5" DATASET=numina bash sweep_psft_1gpu.sh
+```
 
 ## Math
 
 ```bash
 bash scripts/math/train_1gpu.sh
 ```
+
+Use `DATASET=openr1` with the same script to select the OpenR1 profile.
 
 This task trains on the first 100,000 NuminaMath-CoT examples and uses their
 gold solutions as targets. The launcher prepares NuminaMath-CoT and Math500
@@ -51,7 +75,8 @@ launcher and sweep default to LoRA rank 8 (set `LORA_RANK=0` for full tuning).
 Task profiles use global batch 256,
 micro-batch 8, maximum sequence length 2048, warmup ratio 0.1, and one epoch.
 
-PSFT follows [zwhong714/PSFT](https://github.com/zwhong714/PSFT) at commit
+The legacy `LOSS_MODE=psft` SFT-trainer adaptation follows the loss in
+[zwhong714/PSFT](https://github.com/zwhong714/PSFT) at commit
 `930e23980a723ecef5af138e6e32aa3798b1fd64`: PPO clipping with unit positive
 advantages, clip bounds 0.2/0.28, and old-policy log probabilities cached before
 each outer batch. Default mini-batch size 32 gives eight optimizer updates per
@@ -61,8 +86,8 @@ an outer batch share one LR; the scheduler advances once afterward.
 Logging and checkpoint steps count outer batches. Validation reports ordinary token NLL.
 This integration currently supports one GPU without sequence parallelism.
 
-Run `bash sweep_psft_1gpu.sh`, optionally with `TASK=offline_math`.
-Sweep variables: `PSFT_CLIP_RATIO_HIGHS`, `OPTIM_LRS`,
-`OPTIM_WEIGHT_DECAYS`. Other settings: `PSFT_CLIP_RATIO_LOW`,
-`PSFT_MINI_BATCH_SIZE`, `PSFT_WARMUP_STEPS`. Prepare and validate offline data with the offline
-dataset tools before using the generic launcher or sweep.
+For the upstream runtime (including its exact demonstration tokenization,
+response masks, actor updates and reward-based validation), see
+[PSFT_UPSTREAM.md](PSFT_UPSTREAM.md). `sweep_psft_1gpu.sh` now launches this
+runtime on OpenR1 converted to the Numina parquet schema. Its sweep variables
+remain `PSFT_CLIP_RATIO_HIGHS`, `OPTIM_LRS`, and `OPTIM_WEIGHT_DECAYS`.

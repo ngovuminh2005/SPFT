@@ -127,6 +127,9 @@ class FSDPSFTTrainer:
         self.spft_eps = float(spft_config.get("eps", 1e-6))
         if not torch.isfinite(torch.as_tensor(self.spft_eps)) or not 0.0 < self.spft_eps < 0.5:
             raise ValueError("optim.spft.eps must be finite and in (0, 0.5).")
+        self.spft_weight_threshold = float(spft_config.get("weight_threshold", 0.0))
+        if not torch.isfinite(torch.as_tensor(self.spft_weight_threshold)):
+            raise ValueError("optim.spft.weight_threshold must be finite.")
         self.spft_reference_cpu_offload = str(spft_config.get("reference_cpu_offload", False)).lower() in {
             "1",
             "true",
@@ -472,7 +475,7 @@ class FSDPSFTTrainer:
         return reference_log_probs
 
     @staticmethod
-    def _spft_metrics(weights, reference_log_probs, loss_mask):
+    def _spft_metrics(weights, reference_log_probs, loss_mask, weight_threshold):
         valid = loss_mask.bool()
         valid_weights = weights[valid]
         valid_reference_log_probs = reference_log_probs[valid]
@@ -480,6 +483,7 @@ class FSDPSFTTrainer:
             "spft/weight_mean": valid_weights.mean().item(),
             "spft/weight_min": valid_weights.min().item(),
             "spft/weight_max": valid_weights.max().item(),
+            "spft/w_ratio": (valid_weights > weight_threshold).float().mean().item(),
             "spft/ref_target_logprob_mean": valid_reference_log_probs.mean().item(),
             "spft/_valid_token_count": int(valid.sum().item()),
         }
@@ -495,6 +499,27 @@ class FSDPSFTTrainer:
                 betas=tuple(self.config.optim.betas),
                 eps=self.config.optim.get("eps", 1e-8),
                 weight_decay=self.config.optim.weight_decay,
+            )
+
+        if optim_name in {'soren', 'sorenauxadam', 'htmuon', 'htmuonauxadam'}:
+            if self.device_mesh.size() != 1:
+                raise ValueError(f'{optim_name} only supports one device')
+            is_soren = optim_name.startswith('soren')
+            module = importlib.import_module('soren_lamdba' if is_soren else 'htmuon')
+            class_name = 'SingleDeviceSoren' if is_soren else 'SingleDeviceHTMuon'
+            spectral_kwargs = (
+                dict(lamdba=self.config.optim.soren.lamdba, mode=self.config.optim.soren.mode)
+                if is_soren else dict(alpha=self.config.optim.htmuon.alpha)
+            )
+            if optim_name.endswith('auxadam'):
+                return getattr(module, class_name + 'WithAuxAdam')(
+                    self._build_muon_aux_param_groups(False), **spectral_kwargs
+                )
+            main, aux = self._split_muon_param_groups()
+            if aux:
+                raise ValueError(f'{optim_name} has auxiliary parameters; use {optim_name}auxadam')
+            return getattr(module, class_name)(
+                [p for _, p in main], **self._build_plain_optimizer_kwargs(), **spectral_kwargs
             )
 
         optim_module = importlib.import_module(self.config.optim.get("module", "muon"))
@@ -782,7 +807,9 @@ class FSDPSFTTrainer:
 
                 if self.loss_mode == "spft":
                     weights = spft_token_weights(-original_loss, reference_log_probs, self.spft_lambda, self.spft_eps)
-                    spft_metrics = self._spft_metrics(weights, reference_log_probs, loss_mask)
+                    spft_metrics = self._spft_metrics(
+                        weights, reference_log_probs, loss_mask, self.spft_weight_threshold
+                    )
                     loss = loss * weights.to(dtype=loss.dtype)
                 elif self.loss_mode == "dft":
                     probs = torch.softmax(shift_logits, dim=-1)
@@ -880,13 +907,16 @@ class FSDPSFTTrainer:
                 original_loss = full_loss * loss_mask
                 if self.loss_mode == "spft":
                     weights = spft_token_weights(-full_loss, reference_log_probs, self.spft_lambda, self.spft_eps)
-                    spft_metrics = self._spft_metrics(weights, reference_log_probs, loss_mask)
+                    spft_metrics = self._spft_metrics(
+                        weights, reference_log_probs, loss_mask, self.spft_weight_threshold
+                    )
                     loss = full_loss * weights.to(dtype=full_loss.dtype) * loss_mask
                 elif self.loss_mode == "dft":
                     loss = original_loss
 
             if self.loss_mode == "spft":
                 spft_metrics["spft/lambda"] = self.spft_lambda
+                spft_metrics["spft/w_thr"] = self.spft_weight_threshold
 
             valid_token_this_rank = torch.sum(loss_mask)
             normalization_token_count = valid_token_this_rank
@@ -1028,7 +1058,7 @@ class FSDPSFTTrainer:
                     metric[key] = min(values)
                 elif key.endswith("_max"):
                     metric[key] = max(values)
-                elif key.endswith("_mean"):
+                elif key.endswith(("_mean", "_ratio")):
                     metric[key] = (
                         sum(value * count for value, count in zip(values, valid_counts)) / total_valid_tokens
                         if total_valid_tokens
