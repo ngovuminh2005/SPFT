@@ -33,7 +33,8 @@ configure_dft_task_profile "${script_dir}"
 # ------------------------
 : "${SEED:=1}"
 : "${WANDB_API_KEY:=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}"
-: "${DIST_INIT_FILE:=/tmp/verl_dft_1gpu_${USER:-user}_$$.dist}"
+: "${DIST_INIT_FILE:=${repo_root}/.tmp/verl_dft_1gpu_${USER:-user}_$$.dist}"
+mkdir -p "$(dirname "${DIST_INIT_FILE}")"
 : "${LORA_RANK:=0}"
 : "${LORA_ALPHA:=16}"
 : "${LORA_TARGET_MODULES:=all-linear}"
@@ -185,7 +186,7 @@ if [[ "${DRY_RUN:-0}" == "1" ]]; then
     exit 0
 fi
 
-# MODEL_NAME defaults to the standard model from dataset_profiles.sh.
+# MODEL_NAME is selected independently of DATASET.
 ${PYTHON_BIN} -m verl.trainer.fsdp_dft_trainer \
     data.train_files=${TRAIN_FILE} \
     data.val_files=${VAL_FILE} \

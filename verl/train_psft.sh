@@ -60,14 +60,14 @@ args=(
     "actor_rollout_ref.actor.ppo_max_token_len_per_gpu=${PPO_MAX_TOKEN_LEN:-8192}"
     "actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=${INFER_MAX_TOKEN_LEN:-8192}"
     "actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=${INFER_MAX_TOKEN_LEN:-8192}"
-    # Model defaults to DATASET_MODEL_NAME; MODEL_NAME/MODEL_PATH may override it.
-    "actor_rollout_ref.model.path=${MODEL_NAME:-${MODEL_PATH:-${DATASET_MODEL_NAME}}}"
+    # MODEL_NAME is resolved independently of DATASET by the shared profile.
+    "actor_rollout_ref.model.path=${MODEL_NAME}"
     actor_rollout_ref.model.enable_gradient_checkpointing=True
     "actor_rollout_ref.actor.optim.lr=${OPTIM_LR:-1e-6}"
     "actor_rollout_ref.actor.optim.lr_warmup_steps=${PSFT_WARMUP_STEPS:-10}"
     "actor_rollout_ref.actor.optim.weight_decay=${OPTIM_WEIGHT_DECAY:-0.1}"
     "actor_rollout_ref.actor.ppo_mini_batch_size=${PSFT_MINI_BATCH_SIZE:-32}"
-    actor_rollout_ref.actor.fsdp_config.param_offload=False
+    actor_rollout_ref.actor.fsdp_config.param_offload=True
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False
     actor_rollout_ref.actor.entropy_coeff=0 actor_rollout_ref.actor.grad_clip=1.0
     actor_rollout_ref.actor.loss_agg_mode=token-mean

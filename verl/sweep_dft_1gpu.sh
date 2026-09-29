@@ -2,13 +2,15 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+sigmoid_root="$(cd "${script_dir}/../.." && pwd)"
+export HF_HUB_CACHE="${HF_HUB_CACHE:-${sigmoid_root}/Booster/cache}"
 dataset="${DATASET:-numina}"
 source "${script_dir}/dataset_profiles.sh"
 configure_dataset_profile "${script_dir}" "${dataset}"
 dataset="${DATASET}"
 epochs_list="${EPOCHS_LIST:-${EPOCHS:-${TOTAL_EPOCHS:-1}}}"
-MODEL_NAME="${MODEL_NAME:-${DATASET_MODEL_NAME}}"
-# Models: numina=Qwen/Qwen2.5-Math-1.5B; openr1=Qwen/Qwen2.5-7B-Instruct.
+# MODEL_NAME selects the model independently of DATASET (Hub ID or local path).
 
 # Baselines: DFT=SorenAuxAdam (base=8e-4, aux=5e-5, muon=7e-4, lambda=1);
 # SPFT=AdamW (lr=1e-4, lambda=0.1); PSFT=AdamW (lr=1e-6, clip=0.2/0.28).

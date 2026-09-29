@@ -5,7 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 source "${script_dir}/dataset_profiles.sh"
 configure_dataset_profile "${script_dir}" "${DATASET:-numina}"
-# Models: numina=Qwen/Qwen2.5-Math-1.5B; openr1=Qwen/Qwen2.5-7B-Instruct.
+# MODEL_NAME selects the base model independently of DATASET.
 # Training wrappers override this with the trained/merged checkpoint.
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -14,7 +14,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 : "${PYTHON_BIN:=$(command -v python)}"
-: "${MODEL_NAME_OR_PATH:=${DATASET_MODEL_NAME}}"
+: "${MODEL_NAME_OR_PATH:=${MODEL_NAME}}"
 : "${LORA_MERGED_MODEL_DIR:=${MODEL_NAME_OR_PATH}/merged_hf}"
 : "${EVAL_PROMPT_TYPE:=qwen-boxed}"
 : "${EVAL_N_SAMPLING:=16}"

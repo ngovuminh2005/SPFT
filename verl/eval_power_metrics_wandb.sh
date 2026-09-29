@@ -5,7 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 source "${script_dir}/dataset_profiles.sh"
 configure_dataset_profile "${script_dir}" "${DATASET:-numina}"
-# Models: numina=Qwen/Qwen2.5-Math-1.5B; openr1=Qwen/Qwen2.5-7B-Instruct.
+# MODEL_NAME selects the base model independently of DATASET.
 # Set MODEL_NAME_OR_PATH to evaluate a trained checkpoint.
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
@@ -23,7 +23,7 @@ EOF
 fi
 
 : "${PYTHON_BIN:=$(command -v python)}"
-: "${MODEL_NAME_OR_PATH:=${DATASET_MODEL_NAME}}"
+: "${MODEL_NAME_OR_PATH:=${MODEL_NAME}}"
 : "${MAX_ROLLOUT:=${1:-}}"
 
 if [[ -z "${MAX_ROLLOUT}" ]]; then

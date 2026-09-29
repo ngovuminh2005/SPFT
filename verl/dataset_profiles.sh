@@ -21,7 +21,6 @@ configure_dataset_profile() {
         math|numina)
             DATASET="numina"
             TASK="math"
-            DATASET_MODEL_NAME="Qwen/Qwen2.5-Math-1.5B"
             DATASET_TRAIN_FILE="${script_dir}/data/numina_cot/train.parquet"
             DATASET_VAL_FILE="${script_dir}/data/math500/test.parquet"
             DATASET_PSFT_TRAIN_FILE="${script_dir}/data/numina_psft/train.parquet"
@@ -34,7 +33,6 @@ configure_dataset_profile() {
         openr1)
             DATASET="openr1"
             TASK="openr1"
-            DATASET_MODEL_NAME="Qwen/Qwen2.5-7B-Instruct"
             DATASET_TRAIN_FILE="${script_dir}/data/openr1_psft/train.parquet"
             DATASET_VAL_FILE="${script_dir}/data/openr1_psft/test.parquet"
             DATASET_PSFT_TRAIN_FILE="${script_dir}/data/openr1_psft/train.parquet"
@@ -49,7 +47,6 @@ configure_dataset_profile() {
             # dataset is selected with DATASET_SOURCE (numina/openr1).
             DATASET="offline_math"
             TASK="offline_math"
-            DATASET_MODEL_NAME="Qwen/Qwen2.5-Math-1.5B"
             DATASET_TRAIN_FILE="${script_dir}/data/offline_math/train.parquet"
             DATASET_VAL_FILE="${script_dir}/data/math500/test.parquet"
             DATASET_PSFT_TRAIN_FILE="${DATASET_TRAIN_FILE}"
@@ -64,6 +61,12 @@ configure_dataset_profile() {
             return 2
             ;;
     esac
+
+    # Model selection is independent of the dataset. MODEL_PATH remains an alias.
+    MODEL_NAME="${MODEL_NAME:-${MODEL_PATH:-Qwen/Qwen2.5-Math-1.5B}}"
+    export MODEL_NAME
+    # Compatibility for older launchers that consume this variable.
+    DATASET_MODEL_NAME="${MODEL_NAME}"
 
     DATASET_TRAIN_PROMPT_KEY="extra_info"
     DATASET_TRAIN_RESPONSE_KEY="extra_info"

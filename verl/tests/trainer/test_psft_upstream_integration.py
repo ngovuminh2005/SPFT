@@ -82,6 +82,13 @@ class DatasetContract(unittest.TestCase):
 
 
 class LauncherContract(unittest.TestCase):
+    def test_model_selection_is_independent_of_dataset(self):
+        for dataset in ("numina", "openr1"):
+            for model in ("Qwen/Qwen2.5-Math-1.5B", "Qwen/Qwen2.5-7B-Instruct"):
+                with self.subTest(dataset=dataset, model=model):
+                    config = as_config(launch_args(overrides={"DATASET": dataset, "MODEL_NAME": model}))
+                    self.assertEqual(config["actor_rollout_ref.model.path"], model)
+
     def test_local_dft_profiles_select_both_datasets_and_epochs(self):
         numina = local_dry_run("train_dft_1gpu.sh", "numina")
         openr1 = local_dry_run("train_dft_1gpu.sh", "openr1")
@@ -89,7 +96,7 @@ class LauncherContract(unittest.TestCase):
         self.assertIn("Qwen/Qwen2.5-Math-1.5B", numina)
         self.assertIn("epochs=3", numina)
         self.assertIn("data/openr1_psft/train.parquet", openr1)
-        self.assertIn("Qwen/Qwen2.5-7B-Instruct", openr1)
+        self.assertIn("Qwen/Qwen2.5-Math-1.5B", openr1)
         self.assertIn("epochs=3", openr1)
 
     def test_dft_8gpu_launcher_accepts_dataset_and_epochs(self):
