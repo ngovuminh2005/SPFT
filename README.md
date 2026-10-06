@@ -27,7 +27,7 @@ hf auth login
 bash scripts/prepare_wethink.sh
 ```
 
-> Lưu ý: bước này sẽ tải dataset, tải ảnh và giải nén dữ liệu nên có thể chạy khá lâu. Thầy đừng bấm `Ctrl+C` quá sớm.
+> Em thấy bước có thể chạy khá lâu nên hầy đừng bấm `Ctrl+C` quá sớm ạ.
 
 ## 3. Chạy sweep SPFT
 
