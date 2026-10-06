@@ -34,7 +34,7 @@ bash scripts/prepare_wethink.sh
 Lệnh dưới đây chạy lần lượt với `learning rate` bằng `6e-5` và `7e-5`, đồng thời cố định `spft_lambda = 0.2`:
 
 ```bash
-for lr in 6e-5 7e-5; do
+for lr in 6e-5; do
   CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 FORCE_TORCHRUN=1 \
   bash scripts/train_wethink_spft.sh \
     --learning_rate "$lr" \
