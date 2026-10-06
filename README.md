@@ -50,7 +50,7 @@ Sau khi train, kết quả sẽ nằm trong hai thư mục tương ứng:
 
 ```text
 saves/qwen2_5vl-3b/wethink_spft_lr_6e-5_lambda_0.2/
-saves/qwen2_5vl-3b/wethink_spft_lr_7e-5_lambda_0.2/
+#saves/qwen2_5vl-3b/wethink_spft_lr_7e-5_lambda_0.2/
 ```
 
 Mỗi thư mục chứa checkpoint và log của một lần chạy.
