@@ -35,9 +35,11 @@ Lệnh dưới đây chạy lần lượt với `learning rate` bằng `6e-5` v�
 
 ```bash
 for lr in 6e-5 7e-5; do
+  CUDA_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 FORCE_TORCHRUN=1 \
   bash scripts/train_wethink_spft.sh \
     --learning_rate "$lr" \
     --spft_lambda 0.2 \
+    --gradient_accumulation_steps 8 \
     --output_dir "saves/qwen2_5vl-3b/wethink_spft_lr_${lr}_lambda_0.2"
 done
 ```
