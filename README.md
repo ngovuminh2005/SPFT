@@ -27,7 +27,7 @@ hf auth login
 bash scripts/prepare_wethink.sh
 ```
 
-> Em thấy bước có thể chạy khá lâu nên hầy đừng bấm `Ctrl+C` quá sớm ạ.
+> Em thấy bước có thể chạy khá lâu nên thầy đừng bấm `Ctrl+C` quá sớm ạ.
 
 ## 3. Chạy sweep SPFT
 
